@@ -154,37 +154,48 @@ Adapter = {
 	---@return nil | neotest.RunSpec | neotest.RunSpec[]
 	build_spec = function(args)
 		local position = args.tree:data()
-         local command = { "bun", "test", "--reporter=junit", "--reporter-outfile=./neotest-bun.xml" }
-         if position.type == "test" then
-           table.insert(command, "--test-name-pattern")
-           table.insert(command, position.name)
-         end
-         if position.path then
-           table.insert(command, position.path)
-         end
+		local command = { "bun", "test", "--reporter=junit", "--reporter-outfile=./neotest-bun.xml" }
 
-         local spec = {
-           command = command,
-           context = {
-             file = position.path,
-             pos_id = position.id,
-           },
-         }
+		-- Add test name pattern if running a specific test
+		if position.type == "test" then
+			table.insert(command, "--test-name-pattern")
+			table.insert(command, position.name)
+		end
 
-local runtime_args = vim.list_slice(command, 2) -- drop the leading "bun"
-local dap_cfg = {
-  name = "Debug Bun Tests",
-  type = "pwa-node",
-  request = "launch",
-  runtimeExecutable = "bun",
-  runtimeArgs = runtime_args,
-  cwd = vim.fn.getcwd(),
-  console = "integratedTerminal",
-}
-spec.context.dap = dap_cfg
-spec.dap = dap_cfg
+		-- Add file path if running a specific file
+		if position.path then
+			table.insert(command, position.path)
+		end
 
-return spec
+		-- Detect if user requested DAP strategy and prepare a DAP config accordingly
+		local strategy = args.strategy
+		local is_dap = strategy == "dap" or (type(strategy) == "table" and (strategy.name == "dap" or strategy.type == "dap"))
+
+		local spec = {
+			command = command,
+			context = {
+				file = position.path,
+				pos_id = position.id,
+			},
+		}
+
+		if is_dap then
+			-- Create a DAP launch configuration for Bun tests using js-debug (pwa-node)
+			-- We use runtimeExecutable = "bun" and pass the rest of the command as runtimeArgs.
+			-- Keep reporter flags so results can still be parsed from JUnit output after the run.
+			local runtime_args = vim.list_slice(command, 2) -- drop the leading "bun"
+			local dap_cfg = {
+				name = "Debug Bun Tests",
+				type = "pwa-node",
+				request = "launch",
+				runtimeExecutable = "bun",
+				runtimeArgs = runtime_args,
+				cwd = vim.fn.getcwd(),
+				console = "integratedTerminal",
+			}
+			spec.context.dap = dap_cfg
+			spec.dap = dap_cfg
+		end
 
 		return spec
 	end,
