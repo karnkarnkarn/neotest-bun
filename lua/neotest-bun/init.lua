@@ -167,13 +167,37 @@ Adapter = {
 			table.insert(command, position.path)
 		end
 
-		return {
+		-- Detect if user requested DAP strategy and prepare a DAP config accordingly
+		local strategy = args.strategy
+		local is_dap = strategy == "dap" or (type(strategy) == "table" and (strategy.name == "dap" or strategy.type == "dap"))
+
+		local spec = {
 			command = command,
 			context = {
 				file = position.path,
 				pos_id = position.id,
 			},
 		}
+
+		if is_dap then
+			-- Create a DAP launch configuration for Bun tests using js-debug (pwa-node)
+			-- We use runtimeExecutable = "bun" and pass the rest of the command as runtimeArgs.
+			-- Keep reporter flags so results can still be parsed from JUnit output after the run.
+			local runtime_args = vim.list_slice(command, 2) -- drop the leading "bun"
+			local dap_cfg = {
+				name = "Debug Bun Tests",
+				type = "pwa-node",
+				request = "launch",
+				runtimeExecutable = "bun",
+				runtimeArgs = runtime_args,
+				cwd = vim.fn.getcwd(),
+				console = "integratedTerminal",
+			}
+			spec.context.dap = dap_cfg
+			spec.dap = dap_cfg
+		end
+
+		return spec
 	end,
 
 	---@async
